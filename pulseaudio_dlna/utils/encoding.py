@@ -17,20 +17,11 @@
 
 from __future__ import unicode_literals
 
-import logging
-import __init__ as pycastv2
+import sys
+import locale
 
-logging.basicConfig(level=logging.DEBUG)
 
-mc = pycastv2.MediaPlayerController('192.168.1.3')
-try:
-    mc.load('http://192.168.1.2:8080/stream.mp3', 'audio/mpeg')
-    mc.wait(10)
-    mc.disconnect_application()
-    # mc.stop_application()
-except pycastv2.ChannelClosedException:
-    print('Channel was closed.')
-except pycastv2.TimeoutException:
-    print('Request timed out.')
-finally:
-    mc.cleanup()
+def encode_default(bytes):
+    return bytes.encode(
+        sys.stdout.encoding or locale.getpreferredencoding() or 'ascii',
+        errors='replace')
