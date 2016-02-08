@@ -31,7 +31,7 @@ import pulseaudio_dlna.codecs
 logger = logging.getLogger('pulseaudio_dlna.plugins.chromecast.renderer')
 
 
-CHROMECAST_MODEL_NAMES = ['Eureka Dongle', 'Chromecast Audio']
+CHROMECAST_MODEL_NAMES = ['Eureka Dongle', 'Chromecast Audio', 'Freebox Player Mini']
 
 
 class ChromecastRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
@@ -69,13 +69,18 @@ class ChromecastRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 traceback.print_exc()
             return None
 
-    def play(self, url):
+    def play(self, url, artist=None, title=None, thumb=None):
         cast = self._get_media_player()
         if cast is None:
             logger.error('No device was found!')
             return 500
         try:
-            cast.load(url, self.codec.mime_type)
+            cast.load(
+                url,
+                mime_type=self.codec.mime_type,
+                artist=artist,
+                title=title,
+                thumb=thumb)
             self.state = self.PLAYING
             return 200
         except pycastv2.ChannelClosedException:
@@ -116,10 +121,11 @@ class ChromecastRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
 class CoinedChromecastRenderer(
         pulseaudio_dlna.plugins.renderer.CoinedBaseRendererMixin, ChromecastRenderer):
 
-    def play(self, url=None, codec=None):
+    def play(self, url=None, codec=None, artist=None, title=None, thumb=None):
         try:
             stream_url = url or self.get_stream_url()
-            return ChromecastRenderer.play(self, stream_url)
+            return ChromecastRenderer.play(
+                self, stream_url, artist=artist, title=title, thumb=thumb)
         except pulseaudio_dlna.plugins.renderer.NoSuitableEncoderFoundException:
             return 500
 
@@ -137,7 +143,9 @@ class ChromecastRendererFactory(object):
                 'Could no connect to {url}. '
                 'Connection refused.'.format(url=url))
             return None
-        soup = BeautifulSoup.BeautifulSoup(response.content.decode('utf-8'))
+        soup = BeautifulSoup.BeautifulSoup(
+            response.content.decode('utf-8'),
+            convertEntities=BeautifulSoup.BeautifulSoup.HTML_ENTITIES)
         url_object = urlparse.urlparse(url)
         ip, port = url_object.netloc.split(':')
         try:

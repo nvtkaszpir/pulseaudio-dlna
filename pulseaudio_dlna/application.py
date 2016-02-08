@@ -31,10 +31,13 @@ import pulseaudio_dlna.listener
 import pulseaudio_dlna.plugins.upnp
 import pulseaudio_dlna.plugins.chromecast
 import pulseaudio_dlna.encoders
+import pulseaudio_dlna.covermodes
 import pulseaudio_dlna.streamserver
 import pulseaudio_dlna.pulseaudio
 import pulseaudio_dlna.utils.network
 import pulseaudio_dlna.rules
+import pulseaudio_dlna.renderers
+import pulseaudio_dlna.discover
 
 logger = logging.getLogger('pulseaudio_dlna.application')
 
@@ -86,8 +89,30 @@ class Application(object):
         logger.info('Using localhost: {host}:{port}'.format(
             host=host, port=port))
 
+        if options['--ssdp-ttl']:
+            ssdp_ttl = int(options['--ssdp-ttl'])
+            pulseaudio_dlna.discover.RendererDiscover.SSDP_TTL = ssdp_ttl
+            pulseaudio_dlna.listener.SSDPListener.SSDP_TTL = ssdp_ttl
+
+        if options['--ssdp-mx']:
+            ssdp_mx = int(options['--ssdp-mx'])
+            pulseaudio_dlna.discover.RendererDiscover.SSDP_MX = ssdp_mx
+
+        if options['--ssdp-amount']:
+            ssdp_amount = int(options['--ssdp-amount'])
+            pulseaudio_dlna.discover.RendererDiscover.SSDP_AMOUNT = ssdp_amount
+
+        msearch_port = options.get('--msearch-port', None)
+        if msearch_port != 'random':
+            pulseaudio_dlna.discover.RendererDiscover.MSEARCH_PORT = \
+                int(msearch_port)
+
         if options['--create-device-config']:
             self.create_device_config()
+            sys.exit(0)
+
+        if options['--update-device-config']:
+            self.create_device_config(update=True)
             sys.exit(0)
 
         device_config = None
@@ -129,6 +154,12 @@ class Application(object):
                                     str(e) for e in _type.SUPPORTED_BIT_RATES
                                 )))
                         sys.exit(0)
+
+        cover_mode = options['--cover-mode']
+        if cover_mode not in pulseaudio_dlna.covermodes.MODES:
+            logger.info('You specified an unknown cover mode! '
+                        'Application terminates.')
+            sys.exit(1)
 
         logger.info('Encoder settings:')
         for _type in pulseaudio_dlna.encoders.ENCODERS:
@@ -184,6 +215,7 @@ class Application(object):
             bridges, message_queue,
             disable_switchback=disable_switchback,
             disable_device_stop=disable_device_stop,
+            cover_mode=cover_mode,
         )
 
         device_filter = None
@@ -191,8 +223,10 @@ class Application(object):
             device_filter = options['--filter-device'].split(',')
 
         locations = None
+        disable_ssdp_search = False
         if options['--renderer-urls']:
             locations = options['--renderer-urls'].split(',')
+            disable_ssdp_search = True
 
         if options['--request-timeout']:
             request_timeout = float(options['--request-timeout'])
@@ -200,11 +234,19 @@ class Application(object):
                 pulseaudio_dlna.plugins.renderer.BaseRenderer.REQUEST_TIMEOUT = \
                     request_timeout
 
+        holder = pulseaudio_dlna.renderers.RendererHolder(
+            self.PLUGINS, stream_server.ip, stream_server.port, message_queue,
+            device_filter, device_config)
+
+        if locations:
+            holder.process_locations(locations)
+
         try:
-            stream_server_address = stream_server.ip, stream_server.port
             ssdp_listener = pulseaudio_dlna.listener.ThreadedSSDPListener(
-                stream_server_address, message_queue, self.PLUGINS,
-                device_filter, device_config, locations, disable_ssdp_listener)
+                holder,
+                disable_ssdp_listener=disable_ssdp_listener,
+                disable_ssdp_search=disable_ssdp_search
+            )
         except socket.error:
             logger.error(
                 'The SSDP listener could not bind to the port 1900/UDP. '
@@ -225,9 +267,8 @@ class Application(object):
         for process in self.processes:
             process.join()
 
-    def create_device_config(self):
-        holder = pulseaudio_dlna.renderers.RendererHolder(
-            ('', 0), multiprocessing.Queue(), self.PLUGINS)
+    def create_device_config(self, update=False):
+        holder = pulseaudio_dlna.renderers.RendererHolder(self.PLUGINS)
         discover = pulseaudio_dlna.discover.RendererDiscover(holder)
         discover.search()
 
@@ -241,10 +282,16 @@ class Application(object):
             json_text = json.dumps(obj, default=device_filter)
             return json.loads(json_text)
 
-        existing_config = self.read_device_config()
-        if existing_config:
-            new_config = obj_to_dict(holder.renderers)
-            new_config.update(existing_config)
+        if update:
+            existing_config = self.read_device_config()
+            if existing_config:
+                new_config = obj_to_dict(holder.renderers)
+                new_config.update(existing_config)
+            else:
+                logger.error(
+                    'Your device config could not be found at any of the '
+                    'locations "{}"'.format(','.join(self.DEVICE_CONFIG_PATHS)))
+                sys.exit(1)
         else:
             new_config = obj_to_dict(holder.renderers)
         json_text = json.dumps(new_config, indent=4)

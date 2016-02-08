@@ -59,6 +59,7 @@ setuptools.setup(
         "psutil >= 1.2.1",
         "futures >= 2.1.6",
         "chardet >= 2.0.1",
+        "netifaces >= 0.8",
     ],
     entry_points={
         "console_scripts": [
@@ -70,5 +71,6 @@ setuptools.setup(
     ],
     package_data={
         "pulseaudio_dlna.plugins.upnp": ["xml/*.xml"],
+        "pulseaudio_dlna": ["images/*.png"],
     }
 )

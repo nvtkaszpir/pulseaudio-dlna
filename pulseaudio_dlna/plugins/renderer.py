@@ -148,11 +148,16 @@ class BaseRenderer(object):
         for codec in self.codecs:
             if codec.enabled and codec.encoder.available:
                 return codec
-        logger.info('There was no suitable codec found for "{name}". '
-                    'The device can play "{codecs}"'.format(
-                        name=self.label,
-                        codecs=','.join(
-                            [codec.mime_type for codec in self.codecs])))
+        logger.info(
+            'There was no suitable codec found for "{name}". '
+            'Cannot find any of the appropriate binaries: {binaries}.'.format(
+                name=self.label,
+                binaries=', '.join(
+                    '{} ({})'.format(
+                        codec.encoder._binary, codec.mime_type
+                    ) for codec in self.codecs),
+            )
+        )
         raise NoSuitableEncoderFoundException()
 
     @property
@@ -207,7 +212,7 @@ class BaseRenderer(object):
             if isinstance(codec, pulseaudio_dlna.codecs.L16Codec):
                 value = codec.priority * 100000
                 if codec.sample_rate:
-                    value += codec.sample_rate / 1000
+                    value += 200 - abs((44100 - codec.sample_rate) / 1000)
                 if codec.channels:
                     value *= codec.channels
                 return value
@@ -306,21 +311,39 @@ class CoinedBaseRendererMixin():
         self.server_ip = ip
         self.server_port = port
 
-    def get_stream_url(self):
-        server_url = 'http://{ip}:{port}'.format(
+    def _encode_settings(self, settings, suffix=''):
+        base_url = 'http://{ip}:{port}'.format(
             ip=self.server_ip,
             port=self.server_port,
         )
-        settings = {
-            'udn': self.udn,
-        }
         data_string = ','.join(
             ['{}="{}"'.format(k, v) for k, v in settings.iteritems()])
-        stream_name = '/{base_string}/stream.{suffix}'.format(
+        stream_name = '/{base_string}/{suffix}'.format(
             base_string=urllib.quote(base64.b64encode(data_string)),
-            suffix=self.codec.suffix,
+            suffix=suffix,
         )
-        return urlparse.urljoin(server_url, stream_name)
+        return urlparse.urljoin(base_url, stream_name)
+
+    def get_stream_url(self):
+        settings = {
+            'type': 'bridge',
+            'udn': self.udn,
+        }
+        return self._encode_settings(settings, 'stream.' + self.codec.suffix)
+
+    def get_image_url(self, name='default.png'):
+        settings = {
+            'type': 'image',
+            'name': name,
+        }
+        return self._encode_settings(settings)
+
+    def get_sys_icon_url(self, name):
+        settings = {
+            'type': 'sys-icon',
+            'name': name,
+        }
+        return self._encode_settings(settings)
 
     def play(self):
         raise NotImplementedError()

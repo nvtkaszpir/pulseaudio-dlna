@@ -30,21 +30,26 @@ class RendererHolder(object):
     SSDP_BYEBYE = 'ssdp:byebye'
 
     def __init__(
-            self, stream_server_address, message_queue, plugins,
+            self, plugins,
+            stream_ip=None, stream_port=None, message_queue=None,
             device_filter=None, device_config=None):
         self.renderers = {}
         self.registered = {}
-        self.stream_server_address = stream_server_address
+        self.stream_ip = stream_ip
+        self.stream_port = stream_port
         self.device_filter = device_filter
         self.device_config = device_config or {}
         self.message_queue = message_queue
         self.lock = threading.Lock()
         for plugin in plugins:
-            self.registered[plugin.st_header] = plugin
+            for st_header in plugin.st_headers:
+                self.registered[st_header] = plugin
 
     def _retrieve_header_map(self, header):
-        header = re.findall(r"(?P<name>.*?): (?P<value>.*?)\n", header)
-        header = {k.lower(): v.strip() for k, v in dict(header).items()}
+        header = re.findall(r"(?P<name>.*?):(?P<value>.*?)\n", header)
+        header = {
+            k.strip().lower(): v.strip() for k, v in dict(header).items()
+        }
         return header
 
     def _retrieve_device_id(self, header):
@@ -56,22 +61,29 @@ class RendererHolder(object):
         return None
 
     def process_locations(self, locations):
-        for plugin in self.registered.values():
-            for device in plugin.lookup(locations):
-                self._add_renderer(device.udn, device)
+        try:
+            self.lock.acquire()
+            for plugin in self.registered.values():
+                for device in plugin.lookup(locations):
+                    self._add_renderer(device.udn, device)
+        finally:
+            self.lock.release()
 
     def process_msearch_request(self, header):
         header = self._retrieve_header_map(header)
         device_id = self._retrieve_device_id(header)
-
         if device_id is None:
             return
-        st_header = header.get('st', None)
-        if st_header and st_header in self.registered:
-            if device_id not in self.renderers:
-                device = self.registered[st_header].create_device(header)
-                if device is not None:
-                    self._add_renderer_with_filter_check(device_id, device)
+        try:
+            self.lock.acquire()
+            st_header = header.get('st', None)
+            if st_header and st_header in self.registered:
+                if device_id not in self.renderers:
+                    device = self.registered[st_header].create_device(header)
+                    if device is not None:
+                        self._add_renderer_with_filter_check(device_id, device)
+        finally:
+            self.lock.release()
 
     def process_notify_request(self, header):
         header = self._retrieve_header_map(header)
@@ -110,18 +122,20 @@ class RendererHolder(object):
             if config:
                 logger.info(
                     'Using device configuration:\n' + device.__str__(True))
-            ip, port = self.stream_server_address
-            device.set_server_location(ip, port)
+            if self.stream_ip and self.stream_port:
+                device.set_server_location(self.stream_ip, self.stream_port)
             self.renderers[device_id] = device
-            self.message_queue.put({
-                'type': 'add_device',
-                'device': device
-            })
+            if self.message_queue:
+                self.message_queue.put({
+                    'type': 'add_device',
+                    'device': device
+                })
 
     def _remove_renderer_by_id(self, device_id):
         device = self.renderers[device_id]
-        self.message_queue.put({
-            'type': 'remove_device',
-            'device': device
-        })
+        if self.message_queue:
+            self.message_queue.put({
+                'type': 'remove_device',
+                'device': device
+            })
         del self.renderers[device_id]

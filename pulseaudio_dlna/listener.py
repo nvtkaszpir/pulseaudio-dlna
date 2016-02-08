@@ -22,10 +22,13 @@ import logging
 import socket
 import struct
 import setproctitle
+import time
+import gobject
+import os
+import sys
 import chardet
 
-from pulseaudio_dlna.discover import RendererDiscover
-from pulseaudio_dlna.renderers import RendererHolder
+import pulseaudio_dlna.discover
 
 logger = logging.getLogger('pulseaudio_dlna.listener')
 
@@ -33,11 +36,25 @@ logger = logging.getLogger('pulseaudio_dlna.listener')
 class SSDPRequestHandler(SocketServer.BaseRequestHandler):
 
     def handle(self):
-        guess = chardet.detect(self.request[0])
-        packet = self.request[0].decode(guess['encoding'])
+        packet = self._decode(self.request[0])
         lines = packet.splitlines()
-        if len(lines) > 0 and self._is_notify_method(lines[0]):
-            self.server.renderers_holder.process_notify_request(packet)
+        if len(lines) > 0:
+            if self._is_notify_method(lines[0]):
+                logger.debug(
+                    'Recieved the following NOTIFY header: \n{header}'.format(
+                        header=packet))
+                if self.server.holder:
+                    self.server.holder.process_notify_request(packet)
+
+    def _decode(self, data):
+        guess = chardet.detect(data)
+        for encoding in [guess['encoding'], 'utf-8', 'ascii']:
+            try:
+                return data.decode(encoding)
+            except:
+                pass
+        logger.error('Could not decode SSDP packet.')
+        return ''
 
     def _is_notify_method(self, method_header):
         method = self._get_method(method_header)
@@ -48,34 +65,84 @@ class SSDPRequestHandler(SocketServer.BaseRequestHandler):
 
 
 class SSDPListener(SocketServer.UDPServer):
+
+    SSDP_ADDRESS = '239.255.255.250'
+    SSDP_PORT = 1900
+    SSDP_TTL = 10
+
     def __init__(
-            self, stream_server_address, message_queue, plugins,
-            device_filter=None, device_config=None, renderer_urls=None,
-            disable_ssdp_listener=False):
+            self, holder=None,
+            ssdp_ttl=None,
+            disable_ssdp_listener=False,
+            disable_ssdp_search=False):
+        self.holder = holder
+        self.ssdp_ttl = ssdp_ttl or self.SSDP_TTL
         self.disable_ssdp_listener = disable_ssdp_listener
-        self.renderer_urls = renderer_urls
-        self.renderers_holder = RendererHolder(
-            stream_server_address, message_queue, plugins, device_filter,
-            device_config)
-        if not self.disable_ssdp_listener:
-            SocketServer.UDPServer.__init__(
-                self, ('', 1900), SSDPRequestHandler)
-            multicast = struct.pack(
-                "=4sl", socket.inet_aton("239.255.255.250"), socket.INADDR_ANY)
-            self.socket.setsockopt(
-                socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast)
-        if self.renderer_urls is not None:
-            self.renderers_holder.process_locations(self.renderer_urls)
-        else:
-            discover = RendererDiscover(self.renderers_holder)
-            discover.search()
-            logger.info('Discovery complete.')
+        self.disable_ssdp_search = disable_ssdp_search
 
     def run(self):
         if not self.disable_ssdp_listener:
-            setproctitle.setproctitle('ssdp_listener')
-            SocketServer.UDPServer.serve_forever(self)
+            self.allow_reuse_address = True
+            SocketServer.UDPServer.__init__(
+                self, ('', self.SSDP_PORT), SSDPRequestHandler)
+            self.socket.setsockopt(
+                socket.IPPROTO_IP,
+                socket.IP_ADD_MEMBERSHIP,
+                self._multicast_struct(self.SSDP_ADDRESS))
+            self.socket.setsockopt(
+                socket.IPPROTO_IP,
+                socket.IP_MULTICAST_TTL,
+                self.ssdp_ttl)
+
+        if not self.disable_ssdp_search:
+            gobject.timeout_add(100, self.search)
+
+        setproctitle.setproctitle('ssdp_listener')
+        self.serve_forever(self)
+
+    def search(self):
+        discover = pulseaudio_dlna.discover.RendererDiscover(self.holder)
+        discover.search()
+        logger.info('Discovery complete.')
+
+    def _multicast_struct(self, address):
+        return struct.pack(
+            '4sl', socket.inet_aton(address), socket.INADDR_ANY)
 
 
-class ThreadedSSDPListener(SocketServer.ThreadingMixIn, SSDPListener):
+class GobjectMainLoopMixin:
+
+    def serve_forever(self, poll_interval=0.5):
+        self.mainloop = gobject.MainLoop()
+        if hasattr(self, 'socket'):
+            gobject.io_add_watch(
+                self, gobject.IO_IN | gobject.IO_PRI, self._on_new_request)
+        context = self.mainloop.get_context()
+        while True:
+            try:
+                if context.pending():
+                    context.iteration(True)
+                else:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                break
+
+    def _on_new_request(self, sock, *args):
+        self._handle_request_noblock()
+        return True
+
+    def shutdown(self, *args):
+        logger.debug(
+            'SSDPListener GobjectMainLoopMixin.shutdown() pid: {}'.format(
+                os.getpid()))
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
+        self.socket.close()
+        sys.exit(0)
+
+
+class ThreadedSSDPListener(
+        GobjectMainLoopMixin, SocketServer.ThreadingMixIn, SSDPListener):
     pass

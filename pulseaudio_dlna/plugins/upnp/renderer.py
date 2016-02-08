@@ -20,7 +20,6 @@ from __future__ import unicode_literals
 import cgi
 import requests
 import urlparse
-import socket
 import logging
 import pkg_resources
 import BeautifulSoup
@@ -206,7 +205,7 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 status_code=response.status_code,
                 result=response.text))
 
-    def register(self, stream_url, codec=None):
+    def register(self, stream_url, codec=None, artist=None, title=None, thumb=None):
         url = self.service_transport.control_url
         codec = codec or self.codec
         headers = {
@@ -226,10 +225,11 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
             ])
         metadata = self.xml['register_metadata'].format(
             stream_url=stream_url,
-            title='Live Audio',
-            artist='PulseAudio on {}'.format(socket.gethostname()),
-            creator='PulseAudio',
-            album='Stream',
+            title=title or '',
+            artist=artist or '',
+            albumart=thumb or '',
+            creator='',
+            album='',
             encoding=self.ENCODING,
             mime_type=codec.mime_type,
             content_features=str(content_features),
@@ -380,10 +380,12 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
 class CoinedUpnpMediaRenderer(
         pulseaudio_dlna.plugins.renderer.CoinedBaseRendererMixin, UpnpMediaRenderer):
 
-    def play(self, url=None, codec=None):
+    def play(self, url=None, codec=None, artist=None, title=None, thumb=None):
         try:
             stream_url = url or self.get_stream_url()
-            return_code = UpnpMediaRenderer.register(self, stream_url, codec)
+            return_code = UpnpMediaRenderer.register(
+                self, stream_url, codec,
+                artist=artist, title=title, thumb=thumb)
             if return_code == 200:
                 return UpnpMediaRenderer.play(self)
             else:
@@ -399,7 +401,10 @@ class CoinedUpnpMediaRenderer(
 
 class UpnpMediaRendererFactory(object):
 
-    ST_HEADER = 'urn:schemas-upnp-org:device:MediaRenderer:1'
+    ST_HEADERS = [
+        'urn:schemas-upnp-org:device:MediaRenderer:1',
+        'urn:schemas-upnp-org:device:MediaRenderer:2',
+    ]
 
     @classmethod
     def from_url(self, url, type_=UpnpMediaRenderer):
@@ -417,13 +422,15 @@ class UpnpMediaRendererFactory(object):
                 'Could no connect to {url}. '
                 'Connection refused.'.format(url=url))
             return None
-        soup = BeautifulSoup.BeautifulSoup(response.content)
+        soup = BeautifulSoup.BeautifulSoup(
+            response.content,
+            convertEntities=BeautifulSoup.BeautifulSoup.HTML_ENTITIES)
         url_object = urlparse.urlparse(url)
         ip, port = url_object.netloc.split(':')
         services = []
         try:
             for device in soup.root.findAll('device'):
-                if device.devicetype.text != self.ST_HEADER:
+                if device.devicetype.text not in self.ST_HEADERS:
                     continue
                 for service in device.findAll('service'):
                     service = {

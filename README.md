@@ -1,8 +1,7 @@
 # About #
-
-This is _pulseaudio-dlna_. A small DLNA server which brings DLNA / UPNP
+<img align="left" src="samples/images/application.png">
+This is _pulseaudio-dlna_. A lightweight streaming server which brings DLNA / UPNP
 and Chromecast support to PulseAudio and Linux.
-
 It can stream your current PulseAudio playback to different UPNP devices
 (UPNP Media Renderers) or Chromecasts in your network.
 It's main goals are: easy to use, no configuration hassle, no
@@ -35,6 +34,22 @@ UPNP renderers in your network will show up as pulseaudio sinks.
 If I could help you or if you like my work, you can buy me a [coffee, a beer or pizza](https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=totalexceed%40lancode%2ede&item_name=Donation&no_shipping=2&no_note=1&tax=0&currency_code=EUR&bn=PP%2dDonationsBF&charset=UTF%2d8).
 
 ## Changelog ##
+
+ * __master__ - (_2016-02-05_)
+    - Fixed a bug where SSDP some messages could not get parsed correctly
+    - Also support media renderers identifying as `urn:schemas-upnp-org:device:MediaRenderer:2`
+
+ * __0.4.7__ - (_2015-11-18_)
+    - The application can now co-exist with other applications which are using the port 1900/udp (thanks to [klaernie](https://github.com/klaernie))
+    - Fixed the daemon mode to support `psutil` 1.x and 2.x (thanks to [klaernie](https://github.com/klaernie))
+    - HTML entities in device descriptions are now converted automatically
+    - Faster and more reliable device discovery (new dependency `python-netifaces`)
+    - Added the `--cover-mode` option, one mode requires (optional) dependencies `gtk`, `cairo`, `rsvg`
+    - L16 codecs are now selected better (e.g. needed for _XBox 360_)
+    - Fixed a bug where sometimes it was tried to remove sinks twice on cleanup
+    - Added the `--update-device-config` flag
+    - Added the `--ssdp-ttl`, `--ssdp-mx`, `--ssdp-amount` options
+    - Added the `--msearch-port` option
 
  * __0.4.6__ - (_2015-10-17_)
     - Added support for _Google Chromecast Audio_ (thanks to [leonhandreke](https://github.com/leonhandreke))
@@ -151,6 +166,7 @@ If I could help you or if you like my work, you can buy me a [coffee, a beer or 
 ## Installation via PPA ##
 
 Supported Ubuntu releases:
+- 15.10 (Wily Werewolf)
 - 15.04 (Vivid Vervet)
 - 14.04.2 LTS (Trusty Tahr)
 
@@ -205,6 +221,7 @@ will get installed if you install it via the PPA.
 - python-psutil
 - python-concurrent.futures
 - python-chardet
+- python-netifaces
 - vorbis-tools
 - sox
 - lame
@@ -214,7 +231,7 @@ will get installed if you install it via the PPA.
 
 You can install all the dependencies in Ubuntu via:
 
-    sudo apt-get install python2.7 python-pip python-setuptools python-dbus python-beautifulsoup python-docopt python-requests python-setproctitle python-gobject python-protobuf python-notify2 python-psutil python-concurrent.futures python-chardet vorbis-tools sox lame flac faac opus-tools
+    sudo apt-get install python2.7 python-pip python-setuptools python-dbus python-beautifulsoup python-docopt python-requests python-setproctitle python-gobject python-protobuf python-notify2 python-psutil python-concurrent.futures python-chardet python-netifaces vorbis-tools sox lame flac faac opus-tools
 
 ### PulseAudio DBus module ###
 
@@ -305,8 +322,17 @@ Since 0.4, new devices are automatically discovered as they appear on the networ
 ### CLI ###
 
     Usage:
-        pulseaudio-dlna [--host <host>] [--port <port>] [--encoder <encoders>] [--bit-rate=<rate>] [--filter-device=<filter-device>] [--renderer-urls <urls>]  [--request-timeout <timeout>] [--debug] [--fake-http10-content-length] [--fake-http-content-length] [--disable-switchback] [--disable-ssdp-listener] [--disable-device-stop]
-        pulseaudio-dlna [--create-device-config]
+        pulseaudio-dlna [--host <host>] [--port <port>][--encoder <encoders>] [--bit-rate=<rate>]
+                        [--filter-device=<filter-device>]
+                        [--renderer-urls <urls>]
+                        [--request-timeout <timeout>]
+                        [--msearch-port=<msearch-port>] [--ssdp-mx <ssdp-mx>] [--ssdp-ttl <ssdp-ttl>] [--ssdp-amount <ssdp-amount>]
+                        [--cover-mode <mode>]
+                        [--debug]
+                        [--fake-http10-content-length] [--fake-http-content-length]
+                        [--disable-switchback] [--disable-ssdp-listener] [--disable-device-stop]
+        pulseaudio-dlna [--host <host>] [--create-device-config] [--update-device-config]
+                        [--msearch-port=<msearch-port>] [--ssdp-mx <ssdp-mx>] [--ssdp-ttl <ssdp-ttl>] [--ssdp-amount <ssdp-amount>]
         pulseaudio-dlna [-h | --help | --version]
 
     Options:
@@ -318,6 +344,7 @@ Since 0.4, new devices are automatically discovered as they appear on the networ
                                                  - Various codec settings such as the mime type, specific rules or
                                                    the bit rate (depends on the codec)
                                                A written config is loaded by default if the --encoder and --bit-rate options are not used.
+        --update-device-config                 Same as --create-device-config but preserves your existing config from being overwritten
            --host=<host>                       Set the server ip.
         -p --port=<port>                       Set the server port [default: 8080].
         -e --encoder=<encoders>                Set the audio encoder.
@@ -335,6 +362,16 @@ Since 0.4, new devices are automatically discovered as they appear on the networ
                                                filter text will be skipped.
         --renderer-urls=<urls>                 Set the renderer urls yourself. no discovery will commence.
         --request-timeout=<timeout>            Set the timeout for requests in seconds [default: 10].
+        --ssdp-ttl=<ssdp-ttl>                  Set the SSDP socket's TTL [default: 10].
+        --ssdp-mx=<ssdp-mx>                    Set the MX value of the SSDP discovery message [default: 3].
+        --ssdp-amount=<ssdp-amount>            Set the amount of SSDP discovery messages being sent [default: 5].
+        --msearch-port=<msearch-port>          Set the source port of the MSEARCH socket [default: random].
+        --cover-mode=<mode>                    Set the cover mode [default: default].
+                                               Possible modes are:
+                                                 - disabled       No icon is shown
+                                                 - default        The application icon is shown
+                                                 - distribution   The icon of your distribution is shown
+                                                 - application    The audio application's icon is shown
         --debug                                enables detailed debug messages.
         --fake-http-content-length             If set, the content-length of HTTP requests will be set to 100 GB.
         --disable-switchback                   If set, streams won't switched back to the default sink if a device disconnects.
@@ -533,15 +570,35 @@ use the `--encoder` or `--bit-rate` options.
 
 ## Troubleshooting ##
 
-Some devices do not stick to the HTTP 1.0/1.1 standard. Since most devices do,
-_pulseaudio-dlna_ must be instructed by CLI flags to act in a non-standard way.
+- **My device does not get discovered by _pulseaudio-dlna_**
 
-- `--fake-http-content-length`
+    The computer _pulseaudio-dlna_ is running on and your device needs to be in
+    the same network. In uncomplicated home LANs this is normally the case.
+    You can test if other applications are able to find your device,
+    e.g. _BubbleUPnP_ (_Android_ application). If they do it is likely that
+    you are using a firewall / iptables. Try disabling it. If you verified that
+    your firewall is blocking, you should use the `--msearch-port <port>`
+    option and open port 8080/_tcp_, port 1900/_udp_ and port `<port>`/_udp_.
 
-    Adds a faked HTTP Content-Length to HTTP 1.0/1.1 responses. The length is set 
-    to 100 GB and ensures that the device would keep playing for months.
-    This is e.g. necessary for the _Hame Soundrouter_ and depending on the used
-    encoder for _Sonos_ devices.
+- **The device is successfully instructed to play, but the device never
+    connects to _pulseaudio-dlna_**
+
+    Check if your are using a firewall / iptables. If that works, open
+    port 8080/_tcp_ and port 1900/_udp_.
+
+- **The device is successfully instructed to play, but the device immediately
+    disconnects after some seconds**
+
+    Some devices do not stick to the HTTP 1.0/1.1 standard. Since most devices
+    do, _pulseaudio-dlna_ must be instructed by CLI flags to act in a
+    non-standard way.
+
+    - `--fake-http-content-length`
+
+        Adds a faked HTTP Content-Length to HTTP 1.0/1.1 responses. The length
+        is set to 100 GB and ensures that the device would keep playing for
+        months. This is e.g. necessary for the _Hame Soundrouter_ and depending
+        on the used encoder for _Sonos_ devices.
 
 ## Tested devices ##
 
@@ -552,13 +609,17 @@ Device                                                                          
 ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
 D-Link DCH-M225/E                                                               | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:
 [Cocy UPNP media renderer](https://github.com/mnlipp/CoCy)                      | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:
+[gmrender-resurrect](http://github.com/hzeller/gmrender-resurrect)              | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+[rygel](https://wiki.gnome.org/Projects/Rygel)                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 BubbleUPnP (Android App)                                                        | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:
 Samsung Smart TV LED60 (UE60F6300)                                              | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Samsung Smart TV LED40 (UE40ES6100)                                             | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Samsung Smart TV LED48 (UE48JU6560)                                             | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_circle:<sup>2</sup>        | :no_entry_sign:                   | :no_entry_sign:
 Xbmc / Kodi                                                                     | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_circle:<sup>2</sup>        | :white_circle:<sup>2</sup>        | :white_check_mark:
-Philips Streamium NP2500 Network Player                                         | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Philips NP2500                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Philips NP2900                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Yamaha RX-475 (AV Receiver)                                                     | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Yamaha RX-V573 (AV Receiver) <sup>6</sup>                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Majik DSM                                                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 [Pi MusicBox](http://www.woutervanwijk.nl/pimusicbox/)                          | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Google Chromecast                                                               | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:
@@ -567,6 +628,7 @@ Sonos PLAY:1                                                                    
 Sonos PLAY:3                                                                    | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :grey_question:
 Hame Soundrouter                                                                | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:
 [Raumfeld Speaker M](http://raumfeld.com)                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+[Raumfeld Speaker S](http://raumfeld.com)                                       | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:
 Pioneer VSX-824 (AV Receiver)                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 [ROCKI](http://www.myrocki.com/)                                                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Sony STR-DN1050 (AV Receiver)                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
@@ -578,9 +640,13 @@ Yamaha CRX-N560D <sup>4</sup>                                                   
 RaidSonic IB-MP401Air                                                           | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Medion P85055                                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Onkyo TX-NR509                                                                  | :grey_question:                   | :white_check_mark:                | :grey_question:                   | :no_entry_sign:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Onkyo TX-NR616                                                                  | :grey_question:                   | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Denon AVR-3808                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Denon AVR-X4000                                                                 | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:
 DAMAI Airmusic                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Panasonic TX-50CX680W                                                           | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Xbox 360                                                                        | :white_check_mark:<sup>5</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :grey_question:                   | :no_entry_sign:                   | :white_check_mark:
+Freebox Player Mini                                                             | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 
 <sup>1</sup>) Works when specifing the `--fake-http-content-length` flag
 
@@ -589,6 +655,10 @@ Panasonic TX-50CX680W                                                           
 <sup>3</sup>) Works since _0.4.5_ (`--fake-http-content-length` is added automatic)
 
 <sup>4</sup>) The device needs to be in _SERVER_ mode to accept instructions
+
+<sup>5</sup>) Was reported to buffer really long. Approximately 45 seconds
+
+<sup>6</sup>) Was reported to have issues being discovered. Make sure you run the latest firmware
 
 ## Supported encoders ##
 
