@@ -62,6 +62,7 @@ class BaseRenderer(object):
         self._flavour = None
         self._codecs = []
         self._rules = pulseaudio_dlna.rules.Rules()
+        self._workarounds = []
 
     @property
     def udn(self):
@@ -146,18 +147,25 @@ class BaseRenderer(object):
     @property
     def codec(self):
         for codec in self.codecs:
-            if codec.enabled and codec.encoder.available:
+            if codec.enabled and codec.encoder and codec.encoder.available:
                 return codec
+
+        missing_encoders = []
+        for codec in self.codecs:
+            for identifier, encoder_type in codec.ENCODERS.items():
+                encoder = encoder_type()
+                if encoder.binary not in missing_encoders:
+                    missing_encoders.append(encoder.binary)
+
         logger.info(
             'There was no suitable codec found for "{name}". '
-            'Cannot find any of the appropriate binaries: {binaries}.'.format(
+            'The device can play "{codecs}". Install one of following '
+            'encoders: "{encoders}".'.format(
                 name=self.label,
-                binaries=', '.join(
-                    '{} ({})'.format(
-                        codec.encoder._binary, codec.mime_type
-                    ) for codec in self.codecs),
-            )
-        )
+                codecs=','.join(
+                    [codec.mime_type for codec in self.codecs]),
+                encoders=','.join(missing_encoders),
+            ))
         raise NoSuitableEncoderFoundException()
 
     @property
@@ -183,6 +191,14 @@ class BaseRenderer(object):
     @rules.setter
     def rules(self, value):
         self._rules = value
+
+    @property
+    def workarounds(self):
+        return self._workarounds
+
+    @workarounds.setter
+    def workarounds(self, value):
+        self._workarounds = value
 
     def activate(self):
         pass
@@ -234,10 +250,6 @@ class BaseRenderer(object):
                         pulseaudio_dlna.codecs.OggCodec]:
                     codec.rules.append(
                         pulseaudio_dlna.rules.FAKE_HTTP_CONTENT_LENGTH())
-        if self.model_name == 'Kodi':
-            for codec in self.codecs:
-                if type(codec) is pulseaudio_dlna.codecs.WavCodec:
-                    codec.mime_type = 'audio/mpeg'
 
     def set_rules_from_config(self, config):
         self.name = config['name']
@@ -259,6 +271,30 @@ class BaseRenderer(object):
             'Loaded the following device configuration:\n{}'.format(
                 self.__str__(True)))
         return True
+
+    def _before_register(self):
+        for workaround in self.workarounds:
+            workaround.run('before_register')
+
+    def _after_register(self):
+        for workaround in self.workarounds:
+            workaround.run('after_register')
+
+    def _before_play(self):
+        for workaround in self.workarounds:
+            workaround.run('before_play')
+
+    def _after_play(self):
+        for workaround in self.workarounds:
+            workaround.run('after_play')
+
+    def _before_stop(self):
+        for workaround in self.workarounds:
+            workaround.run('before_stop')
+
+    def _after_stop(self):
+        for workaround in self.workarounds:
+            workaround.run('after_stop')
 
     def __eq__(self, other):
         if isinstance(other, BaseRenderer):
