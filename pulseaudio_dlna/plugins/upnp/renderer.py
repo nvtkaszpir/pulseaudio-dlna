@@ -23,12 +23,13 @@ import urlparse
 import logging
 import time
 import pkg_resources
-import BeautifulSoup
+import lxml
 
 import pulseaudio_dlna.pulseaudio
 import pulseaudio_dlna.encoders
 import pulseaudio_dlna.workarounds
 import pulseaudio_dlna.plugins.renderer
+import pulseaudio_dlna.plugins.upnp.byto
 
 logger = logging.getLogger('pulseaudio_dlna.plugins.upnp.renderer')
 
@@ -158,7 +159,13 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
         if config:
             self.set_rules_from_config(config)
         else:
-            self.get_protocol_info()
+            self.codecs = []
+            mime_types = self._get_protocol_info()
+            if mime_types:
+                for mime_type in mime_types:
+                    self.add_mime_type(mime_type)
+                self.check_for_codec_rules()
+                self.prioritize_codecs()
 
     def validate(self):
         if self.service_transport is None:
@@ -214,7 +221,7 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
     def _update_current_state(self):
         start_time = time.time()
         while time.time() - start_time <= self.REQUEST_TIMEOUT:
-            state = self.get_transport_info()
+            state = self._get_transport_info()
             if state is None:
                 return False
             elif state == 'PLAYING':
@@ -268,17 +275,16 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
             response = requests.post(
                 url, data=data.encode(self.ENCODING),
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
-            return response.status_code
+            return response.status_code, None
         except requests.exceptions.Timeout:
-            logger.error(
-                'REGISTER command - Could no connect to {url}. '
-                'Connection timeout.'.format(url=url))
-            return 408
+            message = 'REGISTER command - Could no connect to {url}. ' \
+                      'Connection timeout.'.format(url=url)
+            return 408, message
         finally:
             self._debug('register', url, headers, data, response)
             self._after_register()
 
-    def get_transport_info(self):
+    def _get_transport_info(self):
         url = self.service_transport.control_url
         headers = {
             'Content-Type':
@@ -297,13 +303,12 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 url, data=data.encode(self.ENCODING),
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
-                soup = BeautifulSoup.BeautifulSoup(response.content)
                 try:
-                    return soup('currenttransportstate')[0].text
-                except IndexError:
+                    xml_root = lxml.etree.fromstring(response.content)
+                    return xml_root.find('.//{*}CurrentTransportState').text
+                except:
                     logger.error(
-                        'IndexError: No valid XML returned from {url}.'.format(
-                            url=url))
+                        'No valid XML returned from {url}.'.format(url=url))
                     return None
         except requests.exceptions.Timeout:
             logger.error(
@@ -313,7 +318,7 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
         finally:
             self._debug('get_transport_info', url, headers, data, response)
 
-    def get_protocol_info(self):
+    def _get_protocol_info(self):
         url = self.service_connection.control_url
         headers = {
             'Content-Type':
@@ -332,29 +337,26 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 url, data=data.encode(self.ENCODING),
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
-                soup = BeautifulSoup.BeautifulSoup(response.content)
                 try:
-                    self.codecs = []
-                    sinks = soup('sink')[0].text
+                    mime_types = []
+                    xml_root = lxml.etree.fromstring(response.content)
+                    sinks = xml_root.find('.//{*}Sink').text
                     logger.debug('Got the following mime types: "{}"'.format(
                         sinks))
                     for sink in sinks.split(','):
                         attributes = sink.strip().split(':')
                         if len(attributes) >= 4:
-                            self.add_mime_type(attributes[2])
-                    self.check_for_codec_rules()
-                    self.prioritize_codecs()
-                    return response.status_code
-                except IndexError:
+                            mime_types.append(attributes[2])
+                    return mime_types
+                except:
                     logger.error(
-                        'IndexError: No valid XML returned from {url}.'.format(
-                            url=url))
-                    return 400
+                        'No valid XML returned from {url}.'.format(url=url))
+                    return None
         except requests.exceptions.Timeout:
             logger.error(
                 'PROTOCOL_INFO command - Could no connect to {url}. '
                 'Connection timeout.'.format(url=url))
-            return 408
+            return None
         finally:
             self._debug('get_protocol_info', url, headers, data, response)
 
@@ -379,12 +381,11 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 self.state = self.PLAYING
-            return response.status_code
+            return response.status_code, None
         except requests.exceptions.Timeout:
-            logger.error(
-                'PLAY command - Could no connect to {url}. '
-                'Connection timeout.'.format(url=url))
-            return 408
+            message = 'PLAY command - Could no connect to {url}. ' \
+                      'Connection timeout.'.format(url=url)
+            return 408, message
         finally:
             self._debug('play', url, headers, data, response)
             self._after_play()
@@ -410,12 +411,11 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 self.state = self.IDLE
-            return response.status_code
+            return response.status_code, None
         except requests.exceptions.Timeout:
-            logger.error(
-                'STOP command - Could no connect to {url}. '
-                'Connection timeout.'.format(url=url))
-            return 408
+            message = 'STOP command - Could no connect to {url}. ' \
+                      'Connection timeout.'.format(url=url)
+            return 408, message
         finally:
             self._debug('stop', url, headers, data, response)
             self._after_stop()
@@ -440,12 +440,11 @@ class UpnpMediaRenderer(pulseaudio_dlna.plugins.renderer.BaseRenderer):
                 headers=headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 self.state = self.PAUSE
-            return response.status_code
+            return response.status_code, None
         except requests.exceptions.Timeout:
-            logger.error(
-                'PAUSE command - Could no connect to {url}. '
-                'Connection timeout.'.format(url=url))
-            return 408
+            message = 'PAUSE command - Could no connect to {url}. ' \
+                      'Connection timeout.'.format(url=url)
+            return 408, message
         finally:
             self._debug('pause', url, headers, data, response)
 
@@ -457,7 +456,7 @@ class CoinedUpnpMediaRenderer(
     def play(self, url=None, codec=None, artist=None, title=None, thumb=None):
         try:
             stream_url = url or self.get_stream_url()
-            return_code = UpnpMediaRenderer.register(
+            return_code, message = UpnpMediaRenderer.register(
                 self, stream_url, codec,
                 artist=artist, title=title, thumb=thumb)
             if return_code == 200:
@@ -470,7 +469,7 @@ class CoinedUpnpMediaRenderer(
                         logger.info(
                             'Device state is playing. No need '
                             'to send play command.')
-                        return return_code
+                        return return_code, message
                 else:
                     logger.warning(
                         'Updating device state unsuccessful! '
@@ -478,81 +477,101 @@ class CoinedUpnpMediaRenderer(
                     return UpnpMediaRenderer.play(self)
             else:
                 logger.error('"{}" registering failed!'.format(self.name))
-                return return_code
+                return return_code, None
         except requests.exceptions.ConnectionError:
-            logger.error('The device refused the connection!')
-            return 404
-        except pulseaudio_dlna.plugins.renderer.NoSuitableEncoderFoundException:
-            logger.error('Could not find a suitable encoder!')
-            return 500
+            return 403, 'The device refused the connection!'
+        except pulseaudio_dlna.plugins.renderer.NoEncoderFoundException:
+            return 500, 'Could not find a suitable encoder!'
 
 
 class UpnpMediaRendererFactory(object):
 
-    ST_HEADERS = [
+    NOTIFICATION_TYPES = [
         'urn:schemas-upnp-org:device:MediaRenderer:1',
         'urn:schemas-upnp-org:device:MediaRenderer:2',
     ]
 
     @classmethod
-    def from_url(self, url, type_=UpnpMediaRenderer):
+    def from_url(cls, url, type_=UpnpMediaRenderer):
         try:
             response = requests.get(url, timeout=5)
             logger.debug('Response from UPNP device ({url})\n'
                          '{response}'.format(url=url, response=response.text))
         except requests.exceptions.Timeout:
-            logger.info(
+            logger.warning(
                 'Could no connect to {url}. '
                 'Connection timeout.'.format(url=url))
             return None
         except requests.exceptions.ConnectionError:
-            logger.info(
+            logger.warning(
                 'Could no connect to {url}. '
                 'Connection refused.'.format(url=url))
             return None
-        soup = BeautifulSoup.BeautifulSoup(
-            response.content,
-            convertEntities=BeautifulSoup.BeautifulSoup.HTML_ENTITIES)
-        url_object = urlparse.urlparse(url)
-        ip, port = url_object.netloc.split(':')
-        services = []
-        try:
-            for device in soup.root.findAll('device'):
-                if device.devicetype.text not in self.ST_HEADERS:
-                    continue
-                for service in device.findAll('service'):
-                    service = {
-                        'service_type': service.servicetype.text,
-                        'service_id': service.serviceid.text,
-                        'scpd_url': service.scpdurl.text,
-                        'control_url': service.controlurl.text,
-                        'eventsub_url': service.eventsuburl.text,
-                    }
-                    services.append(service)
-                upnp_device = type_(
-                    device.friendlyname.text,
-                    ip,
-                    port,
-                    device.udn.text,
-                    device.modelname.text if device.modelname else None,
-                    device.modelnumber.text if device.modelnumber else None,
-                    device.manufacturer.text if device.manufacturer else None,
-                    services)
-
-                if device.manufacturer and \
-                   device.manufacturer.text.lower() == 'yamaha corporation':
-                    upnp_device.workarounds.append(
-                        pulseaudio_dlna.workarounds.YamahaWorkaround(
-                            response.content))
-
-                return upnp_device
-        except AttributeError:
-            logger.error(
-                'No valid XML returned from {url}.'.format(url=url))
-            logger.info(response.content)
-            return None
+        return cls.from_xml(url, response.content, type_)
 
     @classmethod
-    def from_header(self, header, type_=UpnpMediaRenderer):
+    def from_xml(cls, url, xml, type_=UpnpMediaRenderer):
+
+        def process_xml(url, xml_root, xml, type_):
+            url_object = urlparse.urlparse(url)
+            ip, port = url_object.netloc.split(':')
+            services = []
+            for device in xml_root.findall('.//{*}device'):
+                device_type = device.find('{*}deviceType')
+                device_friendlyname = device.find('{*}friendlyName')
+                device_udn = device.find('{*}UDN')
+                device_modelname = device.find('{*}modelName')
+                device_modelnumber = device.find('{*}modelNumber')
+                device_manufacturer = device.find('{*}manufacturer')
+
+                if device_type.text not in cls.NOTIFICATION_TYPES:
+                    continue
+
+                for service in device.findall('.//{*}service'):
+                    service = {
+                        'service_type': service.find('{*}serviceType').text,
+                        'service_id': service.find('{*}serviceId').text,
+                        'scpd_url': service.find('{*}SCPDURL').text,
+                        'control_url': service.find('{*}controlURL').text,
+                        'eventsub_url': service.find('{*}eventSubURL').text,
+                    }
+                    services.append(service)
+
+                upnp_device = type_(
+                    unicode(device_friendlyname.text),
+                    unicode(ip),
+                    port,
+                    unicode(device_udn.text),
+                    unicode(device_modelname.text) if (
+                        device_modelname is not None) else None,
+                    unicode(device_modelnumber.text) if (
+                        device_modelnumber is not None) else None,
+                    unicode(device_manufacturer.text) if (
+                        device_manufacturer is not None) else None,
+                    services,
+                )
+
+                if device_manufacturer is not None and \
+                   device_manufacturer.text.lower() == 'yamaha corporation':
+                    upnp_device.workarounds.append(
+                        pulseaudio_dlna.workarounds.YamahaWorkaround(xml))
+
+                return upnp_device
+        try:
+            xml_root = lxml.etree.fromstring(xml)
+            return process_xml(url, xml_root, xml, type_)
+        except:
+            logger.debug('Got broken xml, trying to fix it.')
+            xml = pulseaudio_dlna.plugins.upnp.byto.repair_xml(xml)
+            try:
+                xml_root = lxml.etree.fromstring(xml)
+                return process_xml(url, xml_root, xml, type_)
+            except:
+                logger.error('No valid XML returned from {url}.'.format(
+                    url=url))
+                return None
+
+    @classmethod
+    def from_header(cls, header, type_=UpnpMediaRenderer):
         if header.get('location', None):
-            return self.from_url(header['location'], type_)
+            return cls.from_url(header['location'], type_)

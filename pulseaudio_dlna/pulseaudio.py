@@ -18,7 +18,6 @@
 from __future__ import unicode_literals
 
 import sys
-import locale
 import dbus
 import dbus.mainloop.glib
 import os
@@ -100,8 +99,10 @@ class PulseAudio(object):
                 server_address = self._get_bus_address()
                 return dbus.connection.Connection(server_address)
             except dbus.exceptions.DBusException:
-                logger.error('PulseAudio seems not to be running or PulseAudio'
-                             ' dbus module could not be loaded.')
+                logger.critical(
+                    'PulseAudio seems not to be running or PulseAudio '
+                    'dbus module could not be loaded. The application '
+                    'cannot work properly!')
                 sys.exit(1)
 
     def update(self):
@@ -122,8 +123,8 @@ class PulseAudio(object):
                         sink.streams.append(stream)
         else:
             logger.error(
-                'Could not update sinks and streams. This normally indicates a '
-                'problem with pulseaudio\'s dbus module. Try restarting '
+                'Could not update sinks and streams. This normally indicates '
+                'a problem with pulseaudio\'s dbus module. Try restarting '
                 'pulseaudio if the problem persists.')
 
     def update_playback_streams(self):
@@ -194,7 +195,7 @@ class PulseBaseFactory(object):
         for i, b in enumerate(byte_array):
             if not (i == len(byte_array) - 1 and int(b) == 0):
                 name += struct.pack('<B', b)
-        return name.decode(locale.getpreferredencoding())
+        return pulseaudio_dlna.utils.encoding.decode_default(name)
 
 
 class PulseClientFactory(PulseBaseFactory):
@@ -215,8 +216,9 @@ class PulseClientFactory(PulseBaseFactory):
                 binary=self._convert_bytes_to_unicode(binary_bytes),
             )
         except dbus.exceptions.DBusException:
-            logger.error('PulseClientFactory - Could not get "{object_path}" from dbus.'.format(
-                object_path=client_path))
+            logger.error(
+                'PulseClientFactory - Could not get "{object_path}" '
+                'from dbus.'.format(object_path=client_path))
             return None
 
 
@@ -243,13 +245,14 @@ class PulseClient(object):
         return self.object_path > other.object_path
 
     def __str__(self):
-        return '<PulseClient path="{}" index="{}" name="{}" icon="{}" binary={}>\n'.format(
-            self.object_path,
-            self.index,
-            self.name,
-            self.icon,
-            self.binary,
-        )
+        return '<PulseClient path="{}" index="{}" name="{}" icon="{}" ' \
+               'binary="{}">\n'.format(
+                   self.object_path,
+                   self.index,
+                   self.name,
+                   self.icon,
+                   self.binary
+                   )
 
 
 class PulseModuleFactory(PulseBaseFactory):
@@ -264,8 +267,9 @@ class PulseModuleFactory(PulseBaseFactory):
                 name=unicode(obj.Get('org.PulseAudio.Core1.Module', 'Name')),
             )
         except dbus.exceptions.DBusException:
-            logger.error('PulseModuleFactory - Could not get "{object_path}" from dbus.'.format(
-                object_path=module_path))
+            logger.error(
+                'PulseModuleFactory - Could not get "{object_path}" '
+                'from dbus.'.format(object_path=module_path))
             return None
 
 
@@ -317,8 +321,9 @@ class PulseSinkFactory(PulseBaseFactory):
                 module=PulseModuleFactory.new(bus, module_path),
             )
         except dbus.exceptions.DBusException:
-            logger.error('PulseSinkFactory - Could not get "{object_path}" from dbus.'.format(
-                object_path=object_path))
+            logger.error(
+                'PulseSinkFactory - Could not get "{object_path}" '
+                'from dbus.'.format(object_path=object_path))
             return None
 
 
@@ -402,16 +407,20 @@ class PulseStreamFactory(object):
     def new(self, bus, stream_path):
         try:
             obj = bus.get_object(object_path=stream_path)
-            client_path = unicode(obj.Get('org.PulseAudio.Core1.Stream', 'Client'))
+            client_path = unicode(
+                obj.Get('org.PulseAudio.Core1.Stream', 'Client'))
             return PulseStream(
                 object_path=unicode(stream_path),
-                index=unicode(obj.Get('org.PulseAudio.Core1.Stream', 'Index')),
-                device=unicode(obj.Get('org.PulseAudio.Core1.Stream', 'Device')),
+                index=unicode(obj.Get(
+                    'org.PulseAudio.Core1.Stream', 'Index')),
+                device=unicode(obj.Get(
+                    'org.PulseAudio.Core1.Stream', 'Device')),
                 client=PulseClientFactory.new(bus, client_path),
             )
         except dbus.exceptions.DBusException:
-            logger.error('PulseStreamFactory - Could not get "{object_path}" from dbus.'.format(
-                object_path=stream_path))
+            logger.debug(
+                'PulseStreamFactory - Could not get "{object_path}" '
+                'from dbus.'.format(object_path=stream_path))
             return None
 
 
@@ -446,12 +455,13 @@ class PulseStream(object):
         return self.object_path > other.object_path
 
     def __str__(self):
-        return '<PulseStream path="{}" device="{}" index="{}" client="{}">'.format(
-            self.object_path,
-            self.device,
-            self.index,
-            self.client.index if self.client else None,
-        )
+        return '<PulseStream path="{}" device="{}" index="{}" ' \
+               'client="{}">'.format(
+                   self.object_path,
+                   self.device,
+                   self.index,
+                   self.client.index if self.client else None,
+               )
 
 
 class PulseBridge(object):
@@ -467,7 +477,7 @@ class PulseBridge(object):
             return self.device == other
 
     def __str__(self):
-        return "<Bridge>\n    {}\n    {}\n".format(self.sink, self.device)
+        return '<Bridge>\n    {}\n    {}\n'.format(self.sink, self.device)
 
 
 class PulseWatcher(PulseAudio):
@@ -475,12 +485,12 @@ class PulseWatcher(PulseAudio):
     ASYNC_EXECUTION = True
 
     def __init__(self, bridges_shared, message_queue, disable_switchback=False,
-                 disable_device_stop=False, cover_mode='application'):
+                 disable_device_stop=False, disable_auto_reconnect=True,
+                 cover_mode='application'):
         PulseAudio.__init__(self)
 
         self.bridges = []
         self.bridges_shared = bridges_shared
-        self.devices = []
 
         self.message_queue = message_queue
         self.blocked_devices = []
@@ -490,6 +500,7 @@ class PulseWatcher(PulseAudio):
 
         self.disable_switchback = disable_switchback
         self.disable_device_stop = disable_device_stop
+        self.disable_auto_reconnect = disable_auto_reconnect
 
     def terminate(self, signal_number=None, frame=None):
         if not self.is_terminating:
@@ -552,13 +563,6 @@ class PulseWatcher(PulseAudio):
         del self.bridges_shared[:]
         self.bridges_shared.extend(bridges_copy)
 
-    def update_bridges(self):
-        for device in self.devices:
-            if device not in self.bridges:
-                sink = self.create_null_sink(
-                    device.short_name, device.label)
-                self.bridges.append(PulseBridge(sink, device))
-
     def cleanup(self):
         for bridge in self.bridges:
             logger.info('Remove "{}" sink ...'.format(bridge.sink.name))
@@ -583,11 +587,10 @@ class PulseWatcher(PulseAudio):
     def switch_back(self, bridge, reason):
         title = 'Device "{label}"'.format(label=bridge.device.label)
         if self.fallback_sink:
-            message = ('{reason}. Your streams were switched '
+            message = ('{reason} Your streams were switched '
                        'back to <b>{name}</b>'.format(
                            reason=reason,
-                           name=pulseaudio_dlna.utils.encoding.encode_default(
-                               self.fallback_sink.label)))
+                           name=self.fallback_sink.label))
             pulseaudio_dlna.notification.show(title, message)
 
             self._block_device_handling(bridge.sink.object_path)
@@ -613,16 +616,21 @@ class PulseWatcher(PulseAudio):
         stopped_bridge.device.state = \
             pulseaudio_dlna.plugins.renderer.BaseRenderer.IDLE
 
-        if not self.disable_switchback:
-            reason = 'The device disconnected'
-            if len(stopped_bridge.sink.streams) > 1:
+        reason = 'The device disconnected'
+        if len(stopped_bridge.sink.streams) > 1:
+            if not self.disable_auto_reconnect:
+                self._handle_sink_update(stopped_bridge.sink.object_path)
+            elif not self.disable_switchback:
                 self.switch_back(stopped_bridge, reason)
-            elif len(stopped_bridge.sink.streams) == 1:
-                stream = stopped_bridge.sink.streams[0]
-                if not self._was_stream_moved(stream, stopped_bridge.sink):
+        elif len(stopped_bridge.sink.streams) == 1:
+            stream = stopped_bridge.sink.streams[0]
+            if not self._was_stream_moved(stream, stopped_bridge.sink):
+                if not self.disable_auto_reconnect:
+                    self._handle_sink_update(stopped_bridge.sink.object_path)
+                elif not self.disable_switchback:
                     self.switch_back(stopped_bridge, reason)
-            elif len(stopped_bridge.sink.streams) == 0:
-                pass
+        elif len(stopped_bridge.sink.streams) == 0:
+            pass
 
     def on_device_updated(self, sink_path):
         logger.info('on_device_updated "{path}"'.format(
@@ -692,15 +700,20 @@ class PulseWatcher(PulseAudio):
                     logger.info(
                         'Instructing the device "{}" to stop ...'.format(
                             bridge.device.label))
-                    return_code = bridge.device.stop()
+                    return_code, message = bridge.device.stop()
                     if return_code == 200:
-                        logger.info('The device "{}" was stopped.'.format(
-                            bridge.device.label))
+                        logger.info(
+                            'The device "{}" was stopped.'.format(
+                                bridge.device.label))
                     else:
+                        if not message:
+                            message = 'Unknown reason.'
                         logger.error(
-                            'The device "{}" failed to stop! ({})'.format(
+                            'The device "{}" failed to stop! ({}) - {}'.format(
                                 bridge.device.label,
-                                return_code))
+                                return_code,
+                                message))
+                        self.switch_back(bridge, message)
                     continue
             if bridge.sink.object_path == sink_path:
                 if bridge.device.state == bridge.device.IDLE or \
@@ -709,24 +722,24 @@ class PulseWatcher(PulseAudio):
                         'Instructing the device "{}" to play ...'.format(
                             bridge.device.label))
                     artist, title, thumb = self.cover_mode.get(bridge)
-                    return_code = bridge.device.play(
+                    return_code, message = bridge.device.play(
                         artist=artist, title=title, thumb=thumb)
                     if return_code == 200:
-                        logger.info('The device "{}" is playing.'.format(
-                            bridge.device.label))
+                        logger.info(
+                            'The device "{}" is playing.'.format(
+                                bridge.device.label))
                     else:
+                        if not message:
+                            message = 'Unknown reason.'
                         logger.error(
-                            'The device "{}" failed to play! ({})'.format(
+                            'The device "{}" failed to play! ({}) - {}'.format(
                                 bridge.device.label,
-                                return_code))
-                        self.switch_back(
-                            bridge,
-                            'The device failed to start playing. ({})'.format(
-                                return_code))
+                                return_code,
+                                message))
+                        self.switch_back(bridge, message)
         return False
 
     def add_device(self, device):
-        self.devices.append(device)
         sink = self.create_null_sink(
             device.short_name, device.label)
         self.bridges.append(PulseBridge(sink, device))
@@ -736,7 +749,6 @@ class PulseWatcher(PulseAudio):
             name=device.name, flavour=device.flavour))
 
     def remove_device(self, device):
-        self.devices.remove(device)
         bridge_index_to_remove = None
         for index, bridge in enumerate(self.bridges):
             if bridge.device == device:
@@ -750,3 +762,17 @@ class PulseWatcher(PulseAudio):
             self.share_bridges()
             logger.info('Removed the device "{name}".'.format(
                 name=device.name))
+
+    def update_device(self, device):
+        for bridge in self.bridges:
+            if bridge.device == device:
+                if bridge.device.ip != device.ip or \
+                   bridge.device.port != device.port:
+                    bridge.device.ip = device.ip
+                    bridge.device.port = device.port
+                    logger.info(
+                        'Updated device "{}" - New settings: {}:{}'.format(
+                            device.label, device.ip, device.port))
+                    self.update()
+                    self.share_bridges()
+                    break
