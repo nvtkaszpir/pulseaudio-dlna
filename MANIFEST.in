@@ -1,1 +1,2 @@
 include man/*
+include README.md
