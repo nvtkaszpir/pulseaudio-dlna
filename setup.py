@@ -42,21 +42,19 @@ setuptools.setup(
         "requests >= 2.2.1",
         "setproctitle >= 1.0.1",
         "protobuf >= 2.5.0",
-        "notify2 >= 0.3",
         "psutil >= 1.2.1",
         "futures >= 2.1.6",
         "chardet >= 2.0.1",
         "netifaces >= 0.8",
         "lxml >= 3",
-        "zeroconf >= 0.17",
-    ],
+        ],
     entry_points={
         "console_scripts": [
             "pulseaudio-dlna = pulseaudio_dlna.__main__:main",
         ]
     },
     data_files=[
-        ("share/man/man1", ["man/pulseaudio-dlna.1"]),
+        ("share/man/man1", ["man/pulseaudio-dlna.1.gz"]),
     ],
     package_data={
         "pulseaudio_dlna.plugins.upnp": ["xml/*.xml"],
