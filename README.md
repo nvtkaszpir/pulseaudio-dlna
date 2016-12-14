@@ -35,6 +35,18 @@ If I could help you or if you like my work, you can buy me a [coffee, a beer or 
 
 ## Changelog ##
 
+ * __master__ - (_2016-12-04_)
+    - Fixed a bug where the detection of DLNA devices failed when there were multiple network interfaces
+    - The application now binds to all interfaces by default
+    - When using multiple network interfaces the appropriate network address is being used for streaming (new dependency `python-netaddr`)
+    - Migrated to GI bindings (removed dependencies `python-gobject` `python-rsvg` `python-gtk2`, new dependency `python-gi`, new optional dependencies `gir1.2-rsvg-2.0`, `gir1.2-gtk-3.0`)
+    - Fixed a bug where devices with the same name could keep updating each other
+    - Fixed a bug where codec bit rates could not be set although those were supported
+    - Fixed a bug where a missing xml attribute prevented xml parsing
+    - Added the `--disable-mimetype-check` option
+    - Disabled mimetype check for virtual _Raumfeld_ devices 
+    - Subprocesses now always exit gracefully
+
  * __0.5.2__ - (_2016-04-01_)
     - Catched an exception when record processes cannot start properly
 
@@ -188,7 +200,8 @@ If I could help you or if you like my work, you can buy me a [coffee, a beer or 
 ## Installation via PPA ##
 
 Supported Ubuntu releases:
-- 15.10 (Wily Werewolf)
+- 16.10 (Yakkety Yak)
+- 16.04 (Xenial Xerus)
 - 14.04.2 LTS (Trusty Tahr)
 
 Ubuntu users can install _pulseaudio-dlna_ via the following [repository](https://launchpad.net/~qos/+archive/ubuntu/pulseaudio-dlna).
@@ -237,13 +250,14 @@ will get installed if you install it via the PPA.
 - python-docopt
 - python-requests
 - python-setproctitle
-- python-gobject
+- python-gi
 - python-protobuf
 - python-notify2
 - python-psutil
 - python-concurrent.futures
 - python-chardet
 - python-netifaces
+- python-netaddr
 - python-lxml
 - python-zeroconf
 - vorbis-tools
@@ -255,7 +269,7 @@ will get installed if you install it via the PPA.
 
 You can install all the dependencies in Ubuntu via:
 
-    sudo apt-get install python2.7 python-pip python-setuptools python-dbus python-docopt python-requests python-setproctitle python-gobject python-protobuf python-notify2 python-psutil python-concurrent.futures python-chardet python-netifaces python-lxml python-zeroconf vorbis-tools sox lame flac faac opus-tools
+    sudo apt-get install python2.7 python-pip python-setuptools python-dbus python-docopt python-requests python-setproctitle python-gi python-protobuf python-notify2 python-psutil python-concurrent.futures python-chardet python-netifaces python-netaddr python-lxml python-zeroconf vorbis-tools sox lame flac faac opus-tools
 
 ### PulseAudio DBus module ###
 
@@ -356,7 +370,7 @@ Since 0.4, new devices are automatically discovered as they appear on the networ
                         [--auto-reconnect]
                         [--debug]
                         [--fake-http10-content-length] [--fake-http-content-length]
-                        [--disable-switchback] [--disable-ssdp-listener] [--disable-device-stop] [--disable-workarounds]
+                        [--disable-switchback] [--disable-ssdp-listener] [--disable-device-stop] [--disable-workarounds] [--disable-mimetype-check]
         pulseaudio-dlna [--host <host>] [--create-device-config] [--update-device-config]
                         [--msearch-port=<msearch-port>] [--ssdp-mx <ssdp-mx>] [--ssdp-ttl <ssdp-ttl>] [--ssdp-amount <ssdp-amount>]
         pulseaudio-dlna [-h | --help | --version]
@@ -411,6 +425,7 @@ Since 0.4, new devices are automatically discovered as they appear on the networ
         --disable-ssdp-listener                If set, the application won't bind to the port 1900 and therefore the automatic discovery of new devices won't work.
         --disable-device-stop                  If set, the application won't send any stop commands to renderers at all
         --disable-workarounds                  If set, the application won't apply any device workarounds
+        --disable-mimetype-check               If set, the application won't check the device's mime type capabilities
         -v --version                           Show the version.
         -h --help                              Show the help.
 
@@ -648,12 +663,14 @@ D-Link DCH-M225/E                                                               
 DAMAI Airmusic                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Denon AVR-3808                                                                  | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Denon AVR-X4000                                                                 | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:
-Freebox Player Mini                                                             | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Freebox Player Mini (4K)                                                        | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:
+Freebox Player (Revolution)                                                     | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:
 [gmrender-resurrect](http://github.com/hzeller/gmrender-resurrect)              | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Google Chromecast                                                               | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:
 Google Chromecast Audio                                                         | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :no_entry_sign:                   | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:
 Hame Soundrouter                                                                | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:
 LG BP550                                                                        | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+Libratone ZIPP                                                                  | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :white_check_mark:
 Logitech Media Server                                                           | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Majik DSM                                                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Medion P85055                                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
@@ -684,13 +701,16 @@ Samsung Smart TV LED60 (UE60F6300)                                              
 Sonos PLAY:1                                                                    | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :grey_question:
 Sonos PLAY:3                                                                    | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :white_check_mark:<sup>3</sup>    | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :grey_question:
 Sony SRS-X77                                                                    | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:<sup>1</sup>
+Sony SRS-X88                                                                    | :white_check_mark:<sup>1</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:<sup>1</sup>
 Sony STR-DN1050 (AV Receiver)                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
-[Volumio](http://volumio.org)                                                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+[Volumio](http://volumio.org)                                                   | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+[Volumio 2](http://volumio.org)                                                 | :white_check_mark:                | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Xbmc / Kodi                                                                     | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_check_mark:                | :white_circle:<sup>2</sup>        | :white_circle:<sup>2</sup>        | :white_check_mark:
 Xbox 360                                                                        | :white_check_mark:<sup>5</sup>    | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :grey_question:                   | :no_entry_sign:                   | :white_check_mark:
 Yamaha CRX-N560D <sup>4</sup>                                                   | :white_check_mark:                | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :no_entry_sign:                   | :white_check_mark:
 Yamaha RX-475 (AV Receiver)                                                     | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 Yamaha RX-V573 (AV Receiver) <sup>6</sup>                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
+WDTV Live                                                                       | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:                   | :grey_question:
 
 <sup>1</sup>) Works when specifing the `--fake-http-content-length` flag
 
