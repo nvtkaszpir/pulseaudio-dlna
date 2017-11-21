@@ -34,7 +34,7 @@ setuptools.setup(
         "Topic :: Multimedia :: Sound/Audio",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     ],
-    version='0.5.2',
+    version='0.5.2.git20171120',
     py_modules=[],
     packages=setuptools.find_packages(),
     install_requires=[
@@ -49,7 +49,8 @@ setuptools.setup(
         "netifaces >= 0.8",
         "lxml >= 3",
     ],
-        "console_scripts": [
+    entry_points={
+            "console_scripts": [
             "pulseaudio-dlna = pulseaudio_dlna.__main__:main",
         ]
     },
