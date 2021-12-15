@@ -1,4 +1,4 @@
-# About #
+# About
 *Cygn:* This fork takes over masmu/python3 with various fixes and patches, with the help of community, with fedora packaging in mind. Other distributions should work too.
 - Avalaible as RPM for Fedora / RH flavours on [COPR](https://copr.fedorainfracloud.org/coprs/cygn/pulseaudio-dlna/)
 
@@ -26,7 +26,7 @@ UPNP renderers in your network will show up as pulseaudio sinks.
 ![Image of pulseaudio-dlna](https://github.com/masmu/pulseaudio-dlna/blob/master/samples/images/pavucontrol-sample.png)
 
 
-## License ##
+## License
 
     pulseaudio-dlna is licensed under GPLv3.
 
@@ -43,11 +43,11 @@ UPNP renderers in your network will show up as pulseaudio sinks.
     You should have received a copy of the GNU General Public License
     along with pulseaudio-dlna.  If not, see <http://www.gnu.org/licenses/>.
 
-## Donation ##
+## Donation
 ![Image of pulseaudio-dlna](http://maemo.lancode.de/.webdir/donate.gif)
 If I could help you or if you like my work, you can buy me a [coffee, a beer or pizza](https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=totalexceed%40lancode%2ede&item_name=Donation&no_shipping=2&no_note=1&tax=0&currency_code=EUR&bn=PP%2dDonationsBF&charset=UTF%2d8).
 
-## Changelog ##
+## Changelog
  * __python3__ - (_2020-12-25_)
 
     - Pulled some outstanding fixes waiting on masmu's repo
@@ -223,7 +223,7 @@ If I could help you or if you like my work, you can buy me a [coffee, a beer or 
     - Added the ```--debug``` flag
     - The host ip address is now discovered automatically, no need to specifiy ```--host``` anymore
 
-## Installation via PPA ##
+## Installation via PPA
 
 Supported Ubuntu releases:
 - 17.04 (Zesty Zapus)
@@ -237,7 +237,7 @@ Ubuntu users can install _pulseaudio-dlna_ via the following [repository](https:
     sudo apt-get update
     sudo apt-get install pulseaudio-dlna
 
-### Starting ###
+### Starting
 
 After that you can start _pulseaudio-dlna_ via:
 
@@ -245,7 +245,7 @@ After that you can start _pulseaudio-dlna_ via:
 
 Head over the the _using section_ for further instructions.
 
-## Installation for other distributions ##
+## Installation for other distributions
 
 Some community members are providing packages for others distributions.
 _Keep in mind that since i am not using those, i can hardly support them!_
@@ -259,44 +259,50 @@ _Keep in mind that since i am not using those, i can hardly support them!_
 - Debian
     [https://packages.debian.org/sid/pulseaudio-dlna](https://packages.debian.org/sid/pulseaudio-dlna)
 
-## Installation via git ##
+## Installation via git
 
 Other linux users can clone this git repository,
 make sure you have all the dependencies installed and the PulseAudio DBus module
 is loaded.
 
-### Basic requirements ###
+### Basic requirements
 
 These are the requirements _pulseaudio-dlna_ acutally needs to run. These dependencies
 will get installed if you install it via the PPA.
 
+- faac
+- flac
+- help2man
+- lame
+- libcairo2-dev
+- libgif-dev
+- libjpeg-dev
+- libpango1.0-dev
+- opus-tools
 - python3
-- python3-pip
-- python3-setuptools
+- python3-cairo-dev
+- python3-chardet
 - python3-dbus
 - python3-docopt
+- python3-gi
+- python3-lxml
+- python3-netifaces
+- python3-notify2
+- python3-pip
+- python3-psutil
+- python3-pychromecast
+- python3-pyroute2 | python3-netaddr
 - python3-requests
 - python3-setproctitle
-- python3-gi
-- python3-notify2
-- python3-psutil
-- python3-chardet
-- python3-netifaces
-- python3-pyroute2 | python3-netaddr
-- python3-lxml
-- python3-pychromecast
-- vorbis-tools
+- python3-setuptools
 - sox
-- lame
-- flac
-- faac
-- opus-tools
+- vorbis-tools
 
 You can install all the dependencies in Ubuntu via:
 
-    sudo apt-get install python3 python3-pip python3-setuptools python3-dbus python3-docopt python3-requests python3-setproctitle python3-gi python3-notify2 python3-psutil python3-chardet python3-netifaces python3-pyroute2 python3-netaddr python3-lxml python3-pychromecast vorbis-tools sox lame flac faac opus-tools
+    sudo apt-get install python3 python3-pip python3-setuptools python3-dbus python3-docopt python3-requests python3-setproctitle python3-gi python3-notify2 python3-psutil python3-chardet python3-netifaces python3-pyroute2 python3-netaddr python3-lxml python3-pychromecast vorbis-tools sox lame flac faac opus-tools python3-cairo-dev libcairo2-dev libjpeg-dev libgif-dev libpango1.0-dev help2man
 
-### PulseAudio DBus module ###
+### PulseAudio DBus module
 
 Since version _0.2.2_ the DBus module should be loaded automatically, if it was
 not loaded before.
@@ -311,14 +317,14 @@ favorite editor and append the following line:
 
     load-module module-dbus-protocol
 
-### Install it local ###
+### Install it local
 
 The recommend method of using _pulseaudio-dlna_ is to install it local to a
 python _virtualenv_. In that way you will keep your system clean. If you don't like
 it anymore, just delete the folder.
 For that method you need some additional dependencies.
 
-#### virtualenv requirements ####
+#### virtualenv requirements
 
 - python-virtualenv (Ubuntu <= _14.04 Trusty LTS_)
 - virtualenv (Ubuntu >= _14.10 Utopic_)
@@ -332,7 +338,7 @@ All Ubuntu versions above install:
 
     sudo apt-get install virtualenv python3-dev
 
-#### Installing & starting ####
+#### Installing & starting
 
 Change to the _project root folder_ and start the installation via:
 
@@ -342,12 +348,12 @@ After that you can start _pulseaudio-dlna_ via:
 
     bin/pulseaudio-dlna
 
-### Install it to your system ###
+### Install it to your system
 
 Since some people like it more to install software globally, you can do that too.
 In many software projects this is the default installation method.
 
-#### Installing & starting ####
+#### Installing & starting
 
 Change to the _root folder_ and start the installation via:
 
@@ -357,7 +363,7 @@ After that you can start _pulseaudio-dlna_ via:
 
     pulseaudio-dlna
 
-### Using ###
+### Using
 
 _pulseaudio-dlna_ should detect the ip address your computer is reachable within
 your local area network. If the detected ip address is not correct or there
@@ -382,7 +388,7 @@ UPNP devices from PulseAudio and your UPNP devices will stop playing.
 
 Since 0.4, new devices are automatically discovered as they appear on the network.
 
-### CLI ###
+### CLI
 
     Usage:
         pulseaudio-dlna [--host <host>] [--port <port>][--encoder <encoders> | --codec <codec>] [--bit-rate=<rate>]
@@ -614,7 +620,7 @@ works without the flag. So, you can add a rule for that to that device.
 That's it. _pulseaudio-dlna_ will automatically use that config if you don't
 use the `--encoder` or `--bit-rate` options.
 
-## Known Issues ##
+## Known Issues
 
 - **Distorted sound**
 
@@ -644,7 +650,7 @@ use the `--encoder` or `--bit-rate` options.
     which does not require that much bandwidth to make sure your device
     will keep playing. Of course you will be affected from a higher delay.
 
-## Troubleshooting ##
+## Troubleshooting
 
 - **My device does not get discovered by _pulseaudio-dlna_**
 
@@ -676,7 +682,7 @@ use the `--encoder` or `--bit-rate` options.
         months. This is e.g. necessary for the _Hame Soundrouter_ and depending
         on the used encoder for _Sonos_ devices.
 
-## Tested devices ##
+## Tested devices
 
 A listed entry means that it was successfully tested, even if there is no specific
 codec information available.
@@ -761,7 +767,7 @@ WDTV Live                                                                       
 
 <sup>9</sup>) The manual states it is supported. No success yet, neither with --fake-http-content-length nor with increased timeout values
 
-## Supported encoders ##
+## Supported encoders
 
 Encoder     | Description                       | Identifier
 ------------- | ------------- | -------------
